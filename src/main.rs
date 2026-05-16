@@ -1,7 +1,11 @@
+mod input;
+mod render;
+
 use winit::{
     application::ApplicationHandler,
-    event::WindowEvent,
+    event::{KeyEvent, WindowEvent},
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
+    keyboard::PhysicalKey,
     window::{Window, WindowId},
 };
 
@@ -9,20 +13,25 @@ use std::sync::Arc;
 use wgpu::{
     BackendOptions, Backends, DeviceDescriptor, ExperimentalFeatures, Features, Instance,
     InstanceDescriptor, InstanceFlags, Limits, MemoryBudgetThresholds, MemoryHints, PresentMode,
-    RequestAdapterOptions, Surface,
+    RequestAdapterOptions, util::DeviceExt,
 };
 
 #[derive(Default)]
-struct App {
+pub struct App {
     window: Option<Arc<Window>>,
-    gpu: Option<GpuState>,
+    pub gpu: Option<GpuState>,
 }
 
-struct GpuState {
-    surface: wgpu::Surface<'static>,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    config: wgpu::SurfaceConfiguration,
+pub struct GpuState {
+    pub surface: wgpu::Surface<'static>,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
+    pub config: wgpu::SurfaceConfiguration,
+    pub render_pipeline: wgpu::RenderPipeline,
+    pub vertex_buffer: wgpu::Buffer,
+    pub num_vertices: u32,
+    pub index_buffer: wgpu::Buffer,
+    pub num_indices: u32,
 }
 
 impl ApplicationHandler for App {
@@ -73,12 +82,34 @@ impl ApplicationHandler for App {
         config.present_mode = PresentMode::Fifo;
         surface.configure(&device, &config);
 
+        let pipeline = App::init_shaders(&device, &config);
+
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(render::VERTICES),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+
+        let num_vertices = render::VERTICES.len() as u32;
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(render::INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        let num_indices = render::INDICES.len() as u32;
+
         self.window = Some(window);
         self.gpu = Some(GpuState {
             surface: surface,
             device: device,
             queue: queue,
             config: config,
+            render_pipeline: pipeline,
+            vertex_buffer: vertex_buffer,
+            num_vertices: num_vertices,
+            index_buffer: index_buffer,
+            num_indices: num_indices,
         })
     }
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -87,7 +118,16 @@ impl ApplicationHandler for App {
                 println!("stopping");
                 event_loop.exit();
             }
-            WindowEvent::RedrawRequested => {}
+            WindowEvent::RedrawRequested => {
+                self.update();
+                match self.render() {
+                    Ok(_) => {}
+                    Err(e) => {
+                        eprintln!("render error: {e:?}");
+                        event_loop.exit();
+                    }
+                };
+            }
             WindowEvent::Resized(size) => {
                 if let Some(gpu) = &mut self.gpu {
                     gpu.config.width = size.width.max(1);
@@ -95,41 +135,17 @@ impl ApplicationHandler for App {
                     gpu.surface.configure(&gpu.device, &gpu.config);
                 }
             }
-            _ => (),
+            WindowEvent::KeyboardInput {
+                event:
+                    KeyEvent {
+                        physical_key: PhysicalKey::Code(code),
+                        state: key_state,
+                        ..
+                    },
+                ..
+            } => self.handle_key(event_loop, code, key_state.is_pressed()),
+            _ => {}
         }
-    }
-}
-
-impl App {
-    fn render(&mut self) -> anyhow::Result<()> {
-        self.window?.request_redraw();
-        let gpu = self.gpu.as_mut().unwrap();
-
-        let output = match gpu.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(surface_texture) => surface_texture,
-            wgpu::CurrentSurfaceTexture::Suboptimal(surface_texture) => {
-                gpu.surface.configure(&gpu.device, &gpu.config);
-                surface_texture
-            }
-            wgpu::CurrentSurfaceTexture::Timeout
-            | wgpu::CurrentSurfaceTexture::Occluded
-            | wgpu::CurrentSurfaceTexture::Validation => {
-                return Ok(());
-            }
-            wgpu::CurrentSurfaceTexture::Lost => {
-                anyhow::bail!("Lost Device");
-            }
-        };
-        let view = output
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
-        let mut encoder = gpu
-            .device
-            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
-                label: Some("Render Encoder"),
-            });
-
-        Ok(())
     }
 }
 
