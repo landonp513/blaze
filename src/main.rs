@@ -1,5 +1,6 @@
 mod input;
 mod render;
+mod texture;
 
 use winit::{
     application::ApplicationHandler,
@@ -32,6 +33,8 @@ pub struct GpuState {
     pub num_vertices: u32,
     pub index_buffer: wgpu::Buffer,
     pub num_indices: u32,
+    pub diffuse_bind_group: wgpu::BindGroup,
+    pub diffuse_texture: texture::Texture,
 }
 
 impl ApplicationHandler for App {
@@ -80,9 +83,11 @@ impl ApplicationHandler for App {
             .get_default_config(&adapter, size.width, size.height)
             .expect("surface not supported");
         config.present_mode = PresentMode::Fifo;
-        surface.configure(&device, &config);
+        let diffuse_bytes = include_bytes!("../happy-tree.png");
+        let diffuse_texture =
+            texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "happy-tree.png").unwrap();
 
-        let pipeline = App::init_shaders(&device, &config);
+        surface.configure(&device, &config);
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
@@ -99,6 +104,45 @@ impl ApplicationHandler for App {
         });
         let num_indices = render::INDICES.len() as u32;
 
+        let texture_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            multisampled: false,
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+                label: Some("texture_bind_group_layout"),
+            });
+        let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
+                },
+            ],
+            label: Some("diffuse_bind_group"),
+        });
+
+        let pipeline = App::init_shaders(&device, &config, &texture_bind_group_layout);
+
         self.window = Some(window);
         self.gpu = Some(GpuState {
             surface: surface,
@@ -110,6 +154,8 @@ impl ApplicationHandler for App {
             num_vertices: num_vertices,
             index_buffer: index_buffer,
             num_indices: num_indices,
+            diffuse_bind_group: diffuse_bind_group,
+            diffuse_texture: diffuse_texture,
         })
     }
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {

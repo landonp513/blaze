@@ -9,9 +9,9 @@ Done:
 - Vertex buffer and shader
 - Fragment shader
 - Index buffer
+- Textures
 
 TODO:
-- Textures
 - Uniform buffer
 - Bind groups
 - Textured quad renderer

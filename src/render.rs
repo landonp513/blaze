@@ -6,29 +6,29 @@ use crate::App;
 #[derive(Copy, Clone, Debug, Pod, Zeroable)]
 pub struct Vertex {
     position: [f32; 2],
-    color: [f32; 3],
+    tex_coords: [f32; 2],
 }
 
 pub const VERTICES: &[Vertex] = &[
     Vertex {
         position: [-0.0868241, 0.49240386],
-        color: [0.5, 0.0, 0.5],
+        tex_coords: [0.4131759, 1.0 - 0.99240386],
     }, // A
     Vertex {
         position: [-0.49513406, 0.06958647],
-        color: [0.5, 0.0, 0.5],
+        tex_coords: [0.0048659444, 1.0 - 0.56958647],
     }, // B
     Vertex {
         position: [-0.21918549, -0.44939706],
-        color: [0.5, 0.0, 0.5],
+        tex_coords: [0.28081453, 1.0 - 0.05060294],
     }, // C
     Vertex {
         position: [0.35966998, -0.3473291],
-        color: [0.5, 0.0, 0.5],
+        tex_coords: [0.85967, 1.0 - 0.1526709],
     }, // D
     Vertex {
         position: [0.44147372, 0.2347359],
-        color: [0.5, 0.0, 0.5],
+        tex_coords: [0.9414737, 1.0 - 0.7347359],
     }, // E
 ];
 
@@ -36,10 +36,11 @@ pub const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
 
 impl Vertex {
     const ATTRIBS: [wgpu::VertexAttribute; 2] =
-        wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x3];
+        wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2];
     fn desc() -> wgpu::VertexBufferLayout<'static> {
+        use std::mem;
         wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+            array_stride: mem::size_of::<Vertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
             attributes: &Self::ATTRIBS,
         }
@@ -70,6 +71,7 @@ impl App {
                 anyhow::bail!("Lost Device");
             }
         };
+
         let view = output
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
@@ -103,6 +105,7 @@ impl App {
             });
 
             render_pass.set_pipeline(&gpu.render_pipeline);
+            render_pass.set_bind_group(0, &gpu.diffuse_bind_group, &[]);
             render_pass.set_vertex_buffer(0, gpu.vertex_buffer.slice(..));
             render_pass.set_index_buffer(gpu.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..gpu.num_indices, 0, 0..1);
@@ -116,6 +119,7 @@ impl App {
     pub fn init_shaders(
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
+        texture_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> wgpu::RenderPipeline {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -124,7 +128,7 @@ impl App {
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[],
+                bind_group_layouts: &[Some(&texture_bind_group_layout)],
                 immediate_size: 0,
             });
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
