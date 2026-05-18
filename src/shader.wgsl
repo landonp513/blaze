@@ -8,13 +8,22 @@ struct VertexOutput {
     @location(0) tex_coords: vec2<f32>,
 };
 
+struct Uniforms {
+    screen_size: vec2<f32>,
+}
+
+@group(1) @binding(0)
+var<uniform> uniforms: Uniforms;
+
 @vertex
 fn vs_main(
     model: VertexInput,
 ) -> VertexOutput {
     var out: VertexOutput;
     out.tex_coords = model.tex_coords;
-    out.clip_position = vec4<f32>(model.position, 0.0, 1.0);
+    let clip_x = (model.position[0] / uniforms.screen_size.x) * 2.0 - 1.0;
+    let clip_y = (model.position[1] / uniforms.screen_size.y) * -2.0 + 1.0;
+    out.clip_position = vec4<f32>(clip_x, clip_y, 0.0, 1.0);
     return out;
 }
 

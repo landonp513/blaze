@@ -47,6 +47,22 @@ impl Vertex {
     }
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+pub struct Uniforms {
+    screen_size: [f32; 2],
+    _padding: [f32; 2],
+}
+
+impl Uniforms {
+    pub fn new(width: u32, height: u32) -> Self {
+        Self {
+            screen_size: [width as f32, height as f32],
+            _padding: [0.0; 2],
+        }
+    }
+}
+
 impl App {
     pub fn update(&mut self) {}
     pub fn render(&mut self) -> anyhow::Result<()> {
@@ -106,6 +122,7 @@ impl App {
 
             render_pass.set_pipeline(&gpu.render_pipeline);
             render_pass.set_bind_group(0, &gpu.diffuse_bind_group, &[]);
+            render_pass.set_bind_group(1, &gpu.uniform_bind_group, &[]);
             render_pass.set_vertex_buffer(0, gpu.vertex_buffer.slice(..));
             render_pass.set_index_buffer(gpu.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..gpu.num_indices, 0, 0..1);
@@ -120,6 +137,7 @@ impl App {
         device: &wgpu::Device,
         config: &wgpu::SurfaceConfiguration,
         texture_bind_group_layout: &wgpu::BindGroupLayout,
+        uniform_bind_group_layout: &wgpu::BindGroupLayout,
     ) -> wgpu::RenderPipeline {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -128,7 +146,10 @@ impl App {
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[Some(&texture_bind_group_layout)],
+                bind_group_layouts: &[
+                    Some(&texture_bind_group_layout),
+                    Some(&uniform_bind_group_layout),
+                ],
                 immediate_size: 0,
             });
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {

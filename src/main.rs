@@ -17,6 +17,8 @@ use wgpu::{
     RequestAdapterOptions, util::DeviceExt,
 };
 
+use crate::render::Uniforms;
+
 #[derive(Default)]
 pub struct App {
     window: Option<Arc<Window>>,
@@ -35,6 +37,8 @@ pub struct GpuState {
     pub num_indices: u32,
     pub diffuse_bind_group: wgpu::BindGroup,
     pub diffuse_texture: texture::Texture,
+    pub uniform_buffer: wgpu::Buffer,
+    pub uniform_bind_group: wgpu::BindGroup,
 }
 
 impl ApplicationHandler for App {
@@ -141,7 +145,44 @@ impl ApplicationHandler for App {
             label: Some("diffuse_bind_group"),
         });
 
-        let pipeline = App::init_shaders(&device, &config, &texture_bind_group_layout);
+        let uniforms = Uniforms::new(size.width, size.height);
+
+        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Uniform Buffer"),
+            contents: bytemuck::cast_slice(&[uniforms]),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let uniform_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::VERTEX,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+                label: Some("uniform_bind_group_layout"),
+            });
+
+        let uniform_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &uniform_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: uniform_buffer.as_entire_binding(),
+            }],
+            label: Some("uniform_bind_group"),
+        });
+
+        let pipeline = App::init_shaders(
+            &device,
+            &config,
+            &texture_bind_group_layout,
+            &uniform_bind_group_layout,
+        );
 
         self.window = Some(window);
         self.gpu = Some(GpuState {
@@ -156,6 +197,8 @@ impl ApplicationHandler for App {
             num_indices: num_indices,
             diffuse_bind_group: diffuse_bind_group,
             diffuse_texture: diffuse_texture,
+            uniform_buffer: uniform_buffer,
+            uniform_bind_group: uniform_bind_group,
         })
     }
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -179,6 +222,13 @@ impl ApplicationHandler for App {
                     gpu.config.width = size.width.max(1);
                     gpu.config.height = size.height.max(1);
                     gpu.surface.configure(&gpu.device, &gpu.config);
+
+                    let uniforms = Uniforms::new(size.width, size.height);
+                    gpu.queue.write_buffer(
+                        &gpu.uniform_buffer,
+                        0,
+                        bytemuck::cast_slice(&[uniforms]),
+                    );
                 }
             }
             WindowEvent::KeyboardInput {
