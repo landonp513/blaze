@@ -11,28 +11,24 @@ pub struct Vertex {
 
 pub const VERTICES: &[Vertex] = &[
     Vertex {
-        position: [-0.0868241, 0.49240386],
-        tex_coords: [0.4131759, 1.0 - 0.99240386],
-    }, // A
+        position: [0.0, 0.0],
+        tex_coords: [0.0, 0.0],
+    }, // top-left
     Vertex {
-        position: [-0.49513406, 0.06958647],
-        tex_coords: [0.0048659444, 1.0 - 0.56958647],
-    }, // B
+        position: [200.0, 0.0],
+        tex_coords: [1.0, 0.0],
+    }, // top-right
     Vertex {
-        position: [-0.21918549, -0.44939706],
-        tex_coords: [0.28081453, 1.0 - 0.05060294],
-    }, // C
+        position: [200.0, 200.0],
+        tex_coords: [1.0, 1.0],
+    }, // bottom-right
     Vertex {
-        position: [0.35966998, -0.3473291],
-        tex_coords: [0.85967, 1.0 - 0.1526709],
-    }, // D
-    Vertex {
-        position: [0.44147372, 0.2347359],
-        tex_coords: [0.9414737, 1.0 - 0.7347359],
-    }, // E
+        position: [0.0, 200.0],
+        tex_coords: [0.0, 1.0],
+    }, // bottom-left
 ];
 
-pub const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
+pub const INDICES: &[u16] = &[0, 1, 2, 0, 2, 3];
 
 impl Vertex {
     const ATTRIBS: [wgpu::VertexAttribute; 2] =
@@ -64,7 +60,6 @@ impl Uniforms {
 }
 
 impl App {
-    pub fn update(&mut self) {}
     pub fn render(&mut self) -> anyhow::Result<()> {
         self.window.as_ref().unwrap().request_redraw();
         let gpu = self.gpu.as_mut().unwrap();
@@ -107,8 +102,8 @@ impl App {
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(wgpu::Color {
                             r: 0.1,
-                            g: 0.2,
-                            b: 0.3,
+                            g: 0.1,
+                            b: 0.1,
                             a: 1.0,
                         }),
                         store: wgpu::StoreOp::Store,
@@ -176,7 +171,7 @@ impl App {
                 topology: wgpu::PrimitiveTopology::TriangleList,
                 strip_index_format: None,
                 front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
+                cull_mode: None,
                 polygon_mode: wgpu::PolygonMode::Fill,
                 unclipped_depth: false,
                 conservative: false,

@@ -208,7 +208,6 @@ impl ApplicationHandler for App {
                 event_loop.exit();
             }
             WindowEvent::RedrawRequested => {
-                self.update();
                 match self.render() {
                     Ok(_) => {}
                     Err(e) => {
